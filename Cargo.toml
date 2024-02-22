@@ -1,0 +1,9 @@
+[package]
+name = "warp-rust"
+version = "0.1.0"
+description = ""
+authors = [""]
+
+[dependencies]
+warp = "0.3.6"
+tokio = { version = "0.2", features = ["macros"] }
