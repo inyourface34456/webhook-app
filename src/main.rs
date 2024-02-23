@@ -2,6 +2,8 @@ mod endpoint_funcs;
 mod utils;
 mod webhook_list;
 
+use std::{net::SocketAddr, str::FromStr};
+
 use webhook_list::*;
 use utils::*;
 use endpoint_funcs::*;
@@ -9,10 +11,25 @@ use futures_util::StreamExt;
 use tokio::sync::broadcast::{self, Receiver};
 use tokio_stream::wrappers::BroadcastStream;
 use warp::Filter;
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about)]
+struct Args {
+    // file to load webhook ID's from (seperated by newlines).  If the file does not exist, this will create it.
+    #[arg(long = "load-name", short = 'f', default_value_t = String::from("ids.txt"))]
+    load_name: String,
+
+    /// Adress to bind to
+    #[arg(long = "address", short = 'a', default_value_t = String::from("127.0.0.1:3030"))]
+    address: String,
+
+}
 
 #[tokio::main]
 async fn main() {
-    let ids = WebhookList::new();
+    let args = Args::parse();
+    let ids = WebhookList::load(args.load_name);
     let ids_filter = warp::any().map(move || ids.clone());
 
     let routes = warp::path!("webhook" / String / "listen").and(warp::post()).and(ids_filter.clone()).map(move |id, id_list: WebhookList| { 
@@ -49,19 +66,33 @@ async fn main() {
     });
 
     let send_to_data = warp::post()
-        .and(warp::path!("webhook" / String / "send_text"))
+        .and(warp::path!("webhook" / String / "send"))
         .and(warp::path::end())
         .and(json_string())
         .and(ids_filter.clone())
         .and_then(send);
 
     let get_id = warp::post()
-        .and(warp::path("get_id"))
+        .and(warp::path("issue_id"))
         .and(warp::path::end())
         .and(ids_filter.clone())
         .and_then(issue_id);
 
-    let route = send_to_data.or(routes).or(get_id);
+    let get_perm_id = warp::post()
+        .and(warp::path("issue_perm_id"))
+        .and(warp::path::end())
+        .and(ids_filter.clone())
+        .and_then(issue_perm_id);
 
-    warp::serve(route).run(([127, 0, 0, 1], 3030)).await;
+    let route = send_to_data.or(routes).or(get_id).or(get_perm_id);
+    
+    let address = match SocketAddr::from_str(&args.address) {
+        Ok(dat) => dat,
+        Err(err) => {
+            eprintln!("{}", err.to_string());
+            std::process::exit(1);
+        }
+    };
+
+    warp::serve(route).run(address).await;
 }

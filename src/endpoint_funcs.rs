@@ -21,3 +21,12 @@ pub async fn issue_id(ids: WebhookList) -> Result<impl Reply, Rejection> {
 
     Ok(reply::json(&id))
 }
+
+pub async fn issue_perm_id(ids: WebhookList) -> Result<impl Reply, Rejection> {
+    let id = match ids.issue_perm_id() {
+        Ok(dat) => dat,
+        Err(err) => return Ok(reply::with_status(reply::json(&err.to_string()), warp::http::StatusCode::INTERNAL_SERVER_ERROR))
+    };
+
+    Ok(reply::with_status(reply::json(&id), warp::http::StatusCode::OK))
+}
