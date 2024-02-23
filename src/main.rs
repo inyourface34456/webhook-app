@@ -32,7 +32,40 @@ async fn main() {
     let ids = WebhookList::load(args.load_name);
     let ids_filter = warp::any().map(move || ids.clone());
 
-    let routes = warp::path!("webhook" / String / "listen").and(warp::post()).and(ids_filter.clone()).map(move |id, id_list: WebhookList| { 
+    let route_post = warp::path!("webhook" / String / "listen").and(warp::post()).and(ids_filter.clone()).map(move |id, id_list: WebhookList| { 
+        let id_exist;
+        let rx2: Option<Receiver<String>> = match id_list.get_id(id) {
+            Some(dat) => Some(dat.1),
+            None => None
+        };        
+
+        let stream = match rx2 {
+            Some(rx2) => {
+                id_exist = true;
+                BroadcastStream::new(rx2)
+            },
+            None => {
+                id_exist = false;
+                BroadcastStream::new(broadcast::channel(16).1)
+            }
+            
+        };
+
+        let event_stream = stream.map(move |x| {
+            if id_exist {
+                match x {
+                    Ok(x) => sse_counter(x),
+                    Err(err) => sse_counter(err.to_string())
+                }
+            } else {
+                sse_counter("not found".into())
+            }
+        });
+
+        warp::sse::reply(event_stream)
+    });
+
+    let route_get = warp::path!("webhook" / String / "listen").and(warp::post()).and(ids_filter.clone()).map(move |id, id_list: WebhookList| { 
         let id_exist;
         let rx2: Option<Receiver<String>> = match id_list.get_id(id) {
             Some(dat) => Some(dat.1),
@@ -84,7 +117,7 @@ async fn main() {
         .and(ids_filter.clone())
         .and_then(issue_perm_id);
 
-    let route = send_to_data.or(routes).or(get_id).or(get_perm_id);
+    let route = send_to_data.or(route_get).or(route_post).or(get_id).or(get_perm_id);
     
     let address = match SocketAddr::from_str(&args.address) {
         Ok(dat) => dat,
