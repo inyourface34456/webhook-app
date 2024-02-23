@@ -16,7 +16,7 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(author, version, about, long_about)]
 struct Args {
-    // file to load webhook ID's from (seperated by newlines).  If the file does not exist, this will create it.
+    /// file to load webhook ID's from (seperated by newlines).  If the file does not exist, this will create it.
     #[arg(long = "load-name", short = 'f', default_value_t = String::from("ids.txt"))]
     load_name: String,
 
