@@ -2,7 +2,7 @@ mod endpoint_funcs;
 mod utils;
 mod webhook_list;
 
-use std::{net::SocketAddr, str::FromStr};
+use std::{net::{SocketAddrV4, SocketAddrV6, SocketAddr}, str::FromStr};
 
 use webhook_list::*;
 use utils::*;
@@ -19,6 +19,10 @@ struct Args {
     /// file to load webhook ID's from (seperated by newlines).  If the file does not exist, this will create it.
     #[arg(long = "load-name", short = 'f', default_value_t = String::from("ids.txt"))]
     load_name: String,
+
+    /// weather to use ip v4 vs v6
+    #[arg(long = "ipv6", short = '6', default_value_t = false)]
+    ipv6: bool,
 
     /// Adress to bind to
     #[arg(long = "address", short = 'a', default_value_t = String::from("127.0.0.1:3030"))]
@@ -118,14 +122,26 @@ async fn main() {
         .and_then(issue_perm_id);
 
     let route = send_to_data.or(route_get).or(route_post).or(get_id).or(get_perm_id);
-    
-    let address = match SocketAddr::from_str(&args.address) {
-        Ok(dat) => dat,
-        Err(err) => {
-            eprintln!("{}", err.to_string());
-            std::process::exit(1);
-        }
-    };
+    let address: SocketAddr;
+
+
+    if args.ipv6 {
+        address = match SocketAddrV6::from_str(&args.address) {
+            Ok(dat) => dat.into(),
+            Err(err) => {
+                eprintln!("{}", err.to_string());
+                std::process::exit(1);
+            }
+        };
+    } else {
+        address = match SocketAddrV4::from_str(&args.address) {
+            Ok(dat) => dat.into(),
+            Err(err) => {
+                eprintln!("{}", err.to_string());
+                std::process::exit(1);
+            }
+        };
+    }
 
     warp::serve(route).run(address).await;
 }
